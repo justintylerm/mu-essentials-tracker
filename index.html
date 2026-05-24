@@ -350,8 +350,17 @@
 
 <div id="stage-wrap">
   <div id="stage">
-    <img id="chart" src="chart.jpg" alt="/mu/ essentials chart"
-         width="1781" height="4325" fetchpriority="high" decoding="async" />
+    <picture>
+      <!-- Mobile WebP: ~455 KB, half-resolution, perfect for ≤900px viewports -->
+      <source type="image/webp" media="(max-width: 900px)" srcset="chart-mobile.webp" />
+      <!-- Desktop WebP: ~1.6 MB, full 1781×4325 -->
+      <source type="image/webp" srcset="chart.webp" />
+      <!-- Mobile JPG fallback for browsers without WebP -->
+      <source type="image/jpeg" media="(max-width: 900px)" srcset="chart-mobile.jpg" />
+      <!-- Final fallback: original JPG (rarely used; WebP is ~95% supported) -->
+      <img id="chart" src="chart.jpg" alt="/mu/ essentials chart"
+           width="1781" height="4325" fetchpriority="high" decoding="async" />
+    </picture>
     <!-- sections injected here -->
     <div id="spotlight"></div>
   </div>
