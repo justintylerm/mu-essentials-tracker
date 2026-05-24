@@ -77,7 +77,7 @@
   }
   /* Show side zones only when actions are open. */
   body:not(.actions-open) #left-actions,
-  body:not(.actions-open) #btn-reset { display: none; }
+  body:not(.actions-open) #right-actions { display: none; }
 
   #left-actions button,
   #action-bar button {
@@ -118,12 +118,16 @@
     color: #888;
     border-color: #3a3a3a;
   }
-  /* Reset: standalone icon pinned to the far right edge. */
-  #btn-reset {
+  /* Right-side action group (sibling of #action-bar so position:fixed escapes
+     the transformed parent). Holds upload, download-data, and reset. */
+  #right-actions {
     position: fixed;
     top: 36px;
     right: 13px;
     z-index: 1000;
+    display: flex; gap: 8px; align-items: center;
+  }
+  #right-actions button.icon {
     width: 36px; height: 36px;
     padding: 8px;
     display: inline-flex; align-items: center; justify-content: center;
@@ -134,12 +138,14 @@
     backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
     box-shadow: 0 2px 12px rgba(0,0,0,0.4);
   }
-  #btn-reset:hover { background: rgba(60,30,30,0.95); border-color: #5a2929; }
-  #btn-reset svg {
+  #right-actions button.icon:hover { background: rgba(40,40,40,0.95); }
+  #right-actions button.icon svg {
     width: 16px; height: 16px;
     stroke: currentColor; fill: none; stroke-width: 2;
     stroke-linecap: round; stroke-linejoin: round;
   }
+  /* Reset gets a red-tinted hover to read as destructive. */
+  #btn-reset:hover { background: rgba(60,30,30,0.95) !important; border-color: #5a2929 !important; }
 
   /* Toggle: a small chevron pill */
   #btn-toggle {
@@ -324,9 +330,17 @@
   </button>
 </div>
 
-<button id="btn-reset" class="icon" title="Reset all progress" aria-label="Reset all progress">
-  <svg viewBox="0 0 24 24"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
-</button>
+<div id="right-actions">
+  <button id="btn-upload" class="icon" title="Upload saved data" aria-label="Upload saved data">
+    <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+  </button>
+  <button id="btn-download-data" class="icon" title="Download data backup" aria-label="Download data backup">
+    <svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+  </button>
+  <button id="btn-reset" class="icon" title="Reset all progress" aria-label="Reset all progress">
+    <svg viewBox="0 0 24 24"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
+  </button>
+</div>
 
 <div id="pick-label" style="display:none;"></div>
 <div id="skip-bar" style="display:none;">
@@ -1317,6 +1331,75 @@ document.getElementById('btn-export').addEventListener('click', () => {
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
+});
+
+/* ── Download data: dump all mu-tracker localStorage keys to a JSON file ──
+   Lets you keep a portable backup of your progress, tokens, and locked pick. */
+document.getElementById('btn-download-data').addEventListener('click', () => {
+  const data = {};
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k && k.startsWith('mu-tracker')) data[k] = localStorage.getItem(k);
+  }
+  if (Object.keys(data).length === 0) {
+    alert('No saved data to download yet.');
+    return;
+  }
+  const defaultName = `mu-tracker-backup-${crossed.size}-of-${TOTAL}.json`;
+  const input = prompt('Save backup as:', defaultName);
+  if (!input) return;
+  const filename = /\.json$/i.test(input) ? input : input + '.json';
+
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+});
+
+/* ── Upload data: read a JSON backup and restore it into localStorage ────── */
+document.getElementById('btn-upload').addEventListener('click', () => {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'application/json,.json';
+  input.onchange = e => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      let parsed;
+      try {
+        parsed = JSON.parse(reader.result);
+      } catch (err) {
+        alert('Could not parse backup file: ' + err.message);
+        return;
+      }
+      if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+        alert('Backup file is not in the expected format.');
+        return;
+      }
+      const keys = Object.keys(parsed).filter(k => k.startsWith('mu-tracker'));
+      if (keys.length === 0) {
+        alert('Backup file has no /mu/ tracker data.');
+        return;
+      }
+      if (!confirm(`Replace your current progress with the uploaded backup (${keys.length} keys)? This cannot be undone.`)) return;
+
+      // Clear any existing mu-tracker keys, then write the uploaded ones.
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith('mu-tracker')) localStorage.removeItem(k);
+      }
+      keys.forEach(k => localStorage.setItem(k, parsed[k]));
+      location.reload();
+    };
+    reader.readAsText(file);
+  };
+  input.click();
 });
 
 document.getElementById('btn-reset').addEventListener('click', () => {
