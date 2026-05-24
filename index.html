@@ -1,0 +1,1335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>/mu/ Essentials Tracker — v2</title>
+<style>
+  :root {
+    --bg: #242424;
+    --fg: #e8e8e8;
+    --accent: #ff3030;
+    --pick: #ffd23f;
+    --panel: #1a1a1a;
+    --border: #2a2a2a;
+    --dim: rgba(0,0,0,0.65);
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg); color: var(--fg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+
+  /* ── Sticky progress bar (top) ──────────────────────────────── */
+  #progress-bar {
+    position: sticky; top: 0; z-index: 900;
+    height: 28px;
+    background: #1a1a1a;
+    overflow: hidden;
+    border-bottom: 1px solid var(--border);
+  }
+  #progress-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #ff3030, #ffd23f);
+    transition: width 0.3s ease;
+  }
+  #progress-counter {
+    position: absolute; inset: 0;
+    font-size: 13px; font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: #fff;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.85);
+    pointer-events: auto;
+    cursor: default;
+  }
+  /* Both states overlap centered; we crossfade with opacity for a smooth swap. */
+  #progress-counter .counter-default,
+  #progress-counter .counter-percent {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    transition: opacity 0.2s ease;
+  }
+  #progress-counter .counter-percent { opacity: 0; }
+  #progress-counter:hover .counter-default { opacity: 0; }
+  #progress-counter:hover .counter-percent { opacity: 1; }
+
+  /* ── Action dropdown ──────────────────────────────────────────
+     Three zones — left actions (far left), center toggle (chevron),
+     right reset (X). The chevron stays in the same spot whether the
+     dropdown is open or closed; only the left & right zones appear. */
+  #left-actions {
+    position: fixed;
+    top: 36px;
+    left: 13px;
+    z-index: 1000;
+    display: flex; gap: 8px; align-items: center;
+  }
+  #action-bar {
+    position: fixed;
+    top: 36px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+    display: flex; gap: 8px; align-items: center;
+  }
+  /* Show side zones only when actions are open. */
+  body:not(.actions-open) #left-actions,
+  body:not(.actions-open) #btn-reset { display: none; }
+
+  #left-actions button,
+  #action-bar button {
+    background: rgba(26,26,26,0.92);
+    color: var(--fg);
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 8px 14px; cursor: pointer; font-size: 13px;
+    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+    box-shadow: 0 2px 12px rgba(0,0,0,0.4);
+  }
+  #left-actions button:hover,
+  #action-bar button:hover { background: rgba(40,40,40,0.95); }
+  #left-actions button.primary {
+    background: var(--pick); color: #111; border-color: var(--pick); font-weight: 600;
+  }
+  #left-actions button.primary:hover { background: #ffdb5c; }
+  #left-actions button.primary.locked,
+  #left-actions button.primary:disabled {
+    background: #3a3a3a;
+    color: #888;
+    border-color: #3a3a3a;
+    cursor: not-allowed;
+  }
+  #left-actions button.icon,
+  #action-bar button.icon {
+    padding: 8px;
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 36px; height: 36px;
+  }
+  #left-actions button.icon svg,
+  #action-bar button.icon svg {
+    width: 18px; height: 18px;
+    stroke: currentColor; fill: none; stroke-width: 2;
+    stroke-linecap: round; stroke-linejoin: round;
+  }
+  #left-actions button.icon.active {
+    background: #3a3a3a;
+    color: #888;
+    border-color: #3a3a3a;
+  }
+  /* Reset: standalone icon pinned to the far right edge. */
+  #btn-reset {
+    position: fixed;
+    top: 36px;
+    right: 13px;
+    z-index: 1000;
+    width: 36px; height: 36px;
+    padding: 8px;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: rgba(26,26,26,0.92);
+    color: var(--fg);
+    border: 1px solid var(--border); border-radius: 6px;
+    cursor: pointer;
+    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+    box-shadow: 0 2px 12px rgba(0,0,0,0.4);
+  }
+  #btn-reset:hover { background: rgba(60,30,30,0.95); border-color: #5a2929; }
+  #btn-reset svg {
+    width: 16px; height: 16px;
+    stroke: currentColor; fill: none; stroke-width: 2;
+    stroke-linecap: round; stroke-linejoin: round;
+  }
+
+  /* Toggle: a small chevron pill */
+  #btn-toggle {
+    width: 44px; height: 22px;
+    padding: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 11px;
+  }
+  #btn-toggle svg {
+    width: 14px; height: 14px;
+    stroke: currentColor; fill: none; stroke-width: 2.5;
+    stroke-linecap: round; stroke-linejoin: round;
+    transition: transform 0.2s ease;
+  }
+  body.actions-open #btn-toggle svg {
+    transform: rotate(180deg);
+  }
+  #pick-label {
+    position: fixed;
+    top: 78px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1001;
+    font-size: 14px;
+    font-weight: 600;
+    padding: 8px 16px;
+    background: rgba(26,26,26,0.92);
+    border: 1px solid var(--pick); border-radius: 8px;
+    color: var(--pick);
+    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+    box-shadow: 0 2px 12px rgba(0,0,0,0.5);
+    white-space: nowrap;
+    max-width: calc(100vw - 40px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  #skip-bar {
+    position: fixed;
+    top: 122px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1001;
+    display: flex; align-items: center; gap: 10px;
+    padding: 6px 12px;
+    background: rgba(26,26,26,0.92);
+    border: 1px solid var(--border); border-radius: 8px;
+    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+    box-shadow: 0 2px 12px rgba(0,0,0,0.5);
+    font-size: 13px;
+  }
+  #skip-count {
+    color: #ccc;
+    font-variant-numeric: tabular-nums;
+  }
+  #btn-skip {
+    background: var(--pick); color: #111;
+    border: 1px solid var(--pick); border-radius: 5px;
+    padding: 4px 12px; cursor: pointer; font-weight: 600; font-size: 12px;
+  }
+  #btn-skip:hover { background: #ffdb5c; }
+  #btn-skip:disabled { background: #444; color: #888; border-color: #444; cursor: not-allowed; }
+
+  #stage-wrap {
+    display: block;
+    padding: 0;
+  }
+  #stage {
+    position: relative;
+    display: block;
+    width: 100%;
+    user-select: none; -webkit-user-select: none;
+  }
+  #chart {
+    display: block;
+    width: 100%;
+    max-width: none;
+    height: auto;
+    pointer-events: none;
+  }
+
+  .section {
+    position: absolute;
+    display: grid;
+  }
+  .cell { cursor: pointer; position: relative; }
+  .cell:hover::before {
+    content: "";
+    position: absolute; inset: 4%;
+    outline: 2px solid rgba(255,48,48,0.55);
+    border-radius: 2px;
+    pointer-events: none;
+  }
+  .cell.x {
+    background: #242424;
+    transition: background 0.15s ease;
+  }
+  /* Peek mode: reveal what's underneath at ~75% visibility */
+  body.peek .cell.x {
+    background: rgba(36, 36, 36, 0.90);
+  }
+
+  /* ── Pick mode: spotlight ─────────────────────────────────────── */
+  /* Full-viewport invisible catcher that dismisses the pick when clicked. */
+  #dismiss-catcher {
+    position: fixed; inset: 0;
+    z-index: 49;
+    cursor: pointer;
+    display: none;
+  }
+  /* The spotlight box. No background — chart shows through.
+     The giant box-shadow with positive spread creates the dim everywhere
+     OUTSIDE this rectangle. Sits above the catcher so clicks on the bright
+     album register on the cell underneath. */
+  #spotlight {
+    position: absolute;
+    z-index: 50;
+    pointer-events: none;
+    border-radius: 6px;
+    /* Inset box-shadow draws the "outline" — respects border-radius, unlike
+       the native outline property. */
+    box-shadow:
+      inset 0 0 0 4px var(--pick),
+      0 0 30px 8px rgba(255,210,63,0.85),
+      0 0 0 9999px var(--dim);
+    animation: pulse 1.2s ease-in-out infinite;
+    display: none;
+  }
+  /* During spin animation, kill the pulse — the rapid teleporting is the motion. */
+  #spotlight.spinning {
+    animation: none;
+    box-shadow:
+      inset 0 0 0 4px var(--pick),
+      0 0 18px 4px rgba(255,210,63,0.7),
+      0 0 0 9999px var(--dim);
+  }
+  @keyframes pulse {
+    0%, 100% {
+      box-shadow:
+        inset 0 0 0 4px var(--pick),
+        0 0 30px 8px rgba(255,210,63,0.85),
+        0 0 0 9999px var(--dim);
+    }
+    50% {
+      box-shadow:
+        inset 0 0 0 4px var(--pick),
+        0 0 55px 18px rgba(255,210,63,1),
+        0 0 0 9999px var(--dim);
+    }
+  }
+  /* When pick mode is active, the picked cell needs to sit ABOVE the spotlight
+     so it can receive clicks. Spotlight is pointer-events:none, so clicks pass
+     through it visually — but the .cell.pick z-index keeps the cell over the
+     catcher (catcher is z-index 49). */
+  /* The picked cell only needs to sit above the catcher (z-index 49) so it
+     can receive clicks. All visual highlighting comes from the spotlight. */
+  .cell.pick { z-index: 51; }
+</style>
+</head>
+<body>
+
+<div id="progress-bar">
+  <div id="progress-fill"></div>
+  <div id="progress-counter">
+    <span class="counter-default"><span id="x-count">0</span> / <span id="x-total">0</span></span>
+    <span class="counter-percent" id="x-percent">0%</span>
+  </div>
+</div>
+
+<div id="left-actions">
+  <button id="btn-pick" class="primary">Randomize</button>
+  <button id="btn-peek" class="icon" title="Peek at hidden albums" aria-label="Peek at hidden albums">
+    <svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>
+  </button>
+  <button id="btn-export" class="icon" title="Export progress as JPG" aria-label="Export progress as JPG">
+    <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+  </button>
+</div>
+
+<div id="action-bar">
+  <button id="btn-toggle" title="Toggle controls" aria-label="Toggle controls">
+    <svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+  </button>
+</div>
+
+<button id="btn-reset" class="icon" title="Reset all progress" aria-label="Reset all progress">
+  <svg viewBox="0 0 24 24"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
+</button>
+
+<div id="pick-label" style="display:none;"></div>
+<div id="skip-bar" style="display:none;">
+  <span id="skip-count">0 skips</span>
+  <button id="btn-skip">Skip</button>
+</div>
+
+<div id="stage-wrap">
+  <div id="stage">
+    <img id="chart" alt="/mu/ essentials chart" />
+    <!-- sections injected here -->
+    <div id="spotlight"></div>
+  </div>
+</div>
+<div id="dismiss-catcher"></div>
+
+<!-- chart-data.js sets CHART_DATA_URL, embedded as base64 so the canvas isn't
+     tainted under file:// CORS rules (lets the JPG export work in Chrome). -->
+<script src="chart-data.js"></script>
+<script>
+// Set img src from the embedded data URL.
+document.getElementById('chart').src = CHART_DATA_URL;
+</script>
+
+<script>
+/* Chart image: 1781 × 4325. Coordinates derived from pixel analysis. */
+const SECTIONS = [
+  { id: 'core-aeroplane', label: '/MU/CORE — Aeroplane', top: 335/4325*100,  left: 40/1781*100,   width: 255/1781*100,  height: 245/4325*100,  rows: 1, cols: 1 },
+  { id: 'core-grid',      label: '/MU/CORE',             top: 299/4325*100,  left: 303/1781*100,  width: 967/1781*100,  height: 275/4325*100,  rows: 2, cols: 7 },
+  { id: 'sub',            label: 'Sub-/mu/core',         top: 616/4325*100,  left: 57/1781*100,   width: 1164/1781*100, height: 776/4325*100,  rows: 8, cols: 12 },
+  { id: 'classics',       label: 'Classics',             top: 1442/4325*100, left: 57/1781*100,   width: 1164/1781*100, height: 1067/4325*100, rows: 11, cols: 12 },
+  { id: 'hiphop',         label: 'Hip-Hop',              top: 2558/4325*100, left: 58/1781*100,   width: 1164/1781*100, height: 388/4325*100,  rows: 4, cols: 12 },
+  { id: 'bleeps',         label: 'Bleeps',               top: 2996/4325*100, left: 58/1781*100,   width: 1164/1781*100, height: 388/4325*100,  rows: 4, cols: 12 },
+  { id: 'jazz',           label: 'Jazz',                 top: 3434/4325*100, left: 57/1781*100,   width: 1164/1781*100, height: 388/4325*100,  rows: 4, cols: 12 },
+  { id: 'metal',          label: 'Metal',                top: 3873/4325*100, left: 57/1781*100,   width: 1164/1781*100, height: 388/4325*100,  rows: 4, cols: 12 },
+];
+
+/* Album lookup: { "section:row:col": "Artist - Album" }.
+   Row index 0 maps to letter A, col index 0 maps to 1 in the chart. */
+const ALBUMS = {
+  // /MU/CORE — featured + 7×2 grid
+  'core-aeroplane:0:0': 'Neutral Milk Hotel - In the Aeroplane Over the Sea',
+  'core-grid:0:0': 'Radiohead - Kid A',
+  'core-grid:0:1': 'My Bloody Valentine - Loveless',
+  'core-grid:0:2': 'Animal Collective - Merriweather Post Pavilion',
+  'core-grid:0:3': 'Talking Heads - Remain in Light',
+  'core-grid:0:4': 'Slint - Spiderland',
+  'core-grid:0:5': 'King Crimson - In the Court of the Crimson King',
+  'core-grid:0:6': 'Godspeed You! Black Emperor - Lift Your Skinny Fists Like Antennas to Heaven',
+  'core-grid:1:0': 'Kanye West - My Beautiful Dark Twisted Fantasy',
+  'core-grid:1:1': 'Death Grips - The Money Store',
+  'core-grid:1:2': 'American Football - American Football',
+  'core-grid:1:3': 'Captain Beefheart & His Magic Band - Trout Mask Replica',
+  'core-grid:1:4': 'Swans - Soundtracks For The Blind',
+  'core-grid:1:5': 'The Beach Boys - Pet Sounds',
+  'core-grid:1:6': 'The Velvet Underground - The Velvet Underground & Nico',
+
+  // Sub-/mu/core — row A
+  'sub:0:0':  'Radiohead - OK Computer',
+  'sub:0:1':  'Radiohead - In Rainbows',
+  'sub:0:2':  'Have a Nice Life - Deathconsciousness',
+  'sub:0:3':  'Sigur Rós - Ágætis byrjun',
+  'sub:0:4':  'Godspeed You! Black Emperor - F♯ A♯ ∞',
+  'sub:0:5':  'Talk Talk - Laughing Stock',
+  'sub:0:6':  'Slowdive - Souvlaki',
+  'sub:0:7':  'Björk - Homogenic',
+  'sub:0:8':  'Nirvana - Nevermind',
+  'sub:0:9':  'Nirvana - In Utero',
+  'sub:0:10': 'Elliott Smith - Either/Or',
+  'sub:0:11': 'Jeff Buckley - Grace',
+  // Sub-/mu/core — row B
+  'sub:1:0':  'The Smashing Pumpkins - Siamese Dream',
+  'sub:1:1':  'Pavement - Slanted & Enchanted',
+  'sub:1:2':  'Grimes - Visions',
+  'sub:1:3':  'The Flaming Lips - The Soft Bulletin',
+  'sub:1:4':  'Modest Mouse - The Lonesome Crowded West',
+  'sub:1:5':  'Modest Mouse - The Moon & Antarctica',
+  'sub:1:6':  'Weezer - Weezer (Blue Album)',
+  'sub:1:7':  'Weezer - Pinkerton',
+  'sub:1:8':  'Nine Inch Nails - The Downward Spiral',
+  'sub:1:9':  'Xiu Xiu - A Promise',
+  'sub:1:10': 'Built to Spill - Perfect From Now On',
+  'sub:1:11': "Les Rallizes Dénudés - '77 Live",
+  // Sub-/mu/core — row C
+  'sub:2:0':  'Yo La Tengo - I Can Hear the Heart Beating as One',
+  'sub:2:1':  'The Magnetic Fields - 69 Love Songs',
+  'sub:2:2':  'Fugazi - Repeater',
+  'sub:2:3':  'Cardiacs - Sing to God',
+  'sub:2:4':  'Red House Painters - Down Colorful Hill',
+  'sub:2:5':  'Codeine - Frigid Stars',
+  'sub:2:6':  'Spiritualized - Ladies and Gentlemen We Are Floating in Space',
+  'sub:2:7':  'Low - I Could Live in Hope',
+  'sub:2:8':  'Macintosh Plus - Floral Shoppe',
+  'sub:2:9':  'Duster - Stratosphere',
+  'sub:2:10': 'Lisa Germano - Geek the Girl',
+  'sub:2:11': 'Giles Corey - Giles Corey',
+  // Sub-/mu/core — row D
+  'sub:3:0':  'Royal Trux - Twin Infinitives',
+  'sub:3:1':  'At the Drive-In - Relationship of Command',
+  'sub:3:2':  'Drive Like Jehu - Yank Crime',
+  'sub:3:3':  'Unwound - Leaves Turn Inside You',
+  'sub:3:4':  "Cap'n Jazz - Analphabetapolothology",
+  'sub:3:5':  'Beck - Sea Change',
+  'sub:3:6':  "Jim O'Rourke - Eureka",
+  'sub:3:7':  'James Blake - James Blake',
+  'sub:3:8':  'The Dismemberment Plan - Emergency & I',
+  'sub:3:9':  'Sweet Trip - Velocity : Design : Comfort',
+  'sub:3:10': 'Brand New - The Devil and God Are Raging Inside Me',
+  'sub:3:11': 'Portishead - Dummy',
+  // Sub-/mu/core — row E
+  'sub:4:0':  'Death Grips - Exmilitary',
+  'sub:4:1':  'Death Grips - No Love Deep Web',
+  'sub:4:2':  'Joanna Newsom - Ys',
+  'sub:4:3':  'Joanna Newsom - Have One on Me',
+  'sub:4:4':  'The Strokes - Is This It',
+  'sub:4:5':  'Candy Claws - Ceres & Calypso in the Deep Time',
+  'sub:4:6':  'Tim Hecker - Ravedeath, 1972',
+  'sub:4:7':  'The Microphones - The Glow, Pt. 2',
+  'sub:4:8':  'They Might Be Giants - Flood',
+  'sub:4:9':  'Tame Impala - Lonerism',
+  'sub:4:10': 'Sufjan Stevens - Illinois',
+  'sub:4:11': 'Sufjan Stevens - The Age of Adz',
+  // Sub-/mu/core — row F
+  'sub:5:0':  'Sun Kil Moon - Benji',
+  'sub:5:1':  'Tortoise - Millions Now Living Will Never Die',
+  'sub:5:2':  'Arcade Fire - Funeral',
+  'sub:5:3':  'The Avalanches - Since I Left You',
+  'sub:5:4':  'Gorillaz - Demon Days',
+  'sub:5:5':  'Mac DeMarco - Salad Days',
+  'sub:5:6':  'Mercury Rev - Yerself Is Steam',
+  'sub:5:7':  'Don Caballero - What Burns Never Returns',
+  'sub:5:8':  'The Jesus Lizard - Goat',
+  'sub:5:9':  'The Mars Volta - De-Loused in the Comatorium',
+  'sub:5:10': 'Coil - The Ape of Naples',
+  'sub:5:11': 'LCD Soundsystem - Sound of Silver',
+  // Sub-/mu/core — row G
+  'sub:6:0':  'Swans - The Seer',
+  'sub:6:1':  'Swans - To Be Kind',
+  'sub:6:2':  'Fishmans - Long Season',
+  'sub:6:3':  'Boredoms - Vision Creation Newsun',
+  'sub:6:4':  'Interpol - Turn on the Bright Lights',
+  'sub:6:5':  'Fleet Foxes - Fleet Foxes',
+  'sub:6:6':  'Nick Cave & The Bad Seeds - Let Love In',
+  'sub:6:7':  'Dean Blunt - The Redeemer',
+  'sub:6:8':  'The Antlers - Hospice',
+  'sub:6:9':  'Kanye West - Yeezus',
+  'sub:6:10': 'The Olivia Tremor Control - Black Foliage: Animation Music',
+  'sub:6:11': 'Ween - The Mollusk',
+  // Sub-/mu/core — row H
+  'sub:7:0':  'Panda Bear - Person Pitch',
+  'sub:7:1':  'The Beach Boys - The SMiLE Sessions',
+  'sub:7:2':  "Belle and Sebastian - If You're Feeling Sinister",
+  'sub:7:3':  "Animal Collective - Spirit They're Gone, Spirit They've Vanished",
+  'sub:7:4':  'Animal Collective - Sung Tongs',
+  'sub:7:5':  'Animal Collective - Strawberry Jam',
+  'sub:7:6':  'Queens of the Stone Age - Songs for the Deaf',
+  'sub:7:7':  'Stars of the Lid - The Tired Sounds of Stars of the Lid',
+  'sub:7:8':  'Car Seat Headrest - Twin Fantasy',
+  'sub:7:9':  'Mr. Bungle - California',
+  'sub:7:10': 'Ride - Nowhere',
+  'sub:7:11': 'Stereolab - Transient Random-Noise Bursts with Announcements',
+
+  // Classics — row A
+  'classics:0:0':  'The Velvet Underground - Loaded',
+  'classics:0:1':  'The Velvet Underground - The Velvet Underground',
+  'classics:0:2':  'The Velvet Underground - White Light/White Heat',
+  'classics:0:3':  'Paul McCartney - Ram',
+  'classics:0:4':  'The Doors - The Doors',
+  'classics:0:5':  'Tom Waits - Rain Dogs',
+  'classics:0:6':  'The Rolling Stones - Exile on Main St.',
+  'classics:0:7':  'The Beatles - Revolver',
+  'classics:0:8':  'The Beatles - Abbey Road',
+  'classics:0:9':  "The Beatles - Sgt. Pepper's Lonely Hearts Club Band",
+  'classics:0:10': 'Love - Forever Changes',
+  'classics:0:11': 'Leonard Cohen - Songs of Leonard Cohen',
+  // Classics — row B
+  'classics:1:0':  'The Kinks - The Kinks Are the Village Green Preservation Society',
+  'classics:1:1':  'Yes - Close to the Edge',
+  'classics:1:2':  "Marvin Gaye - What's Going On",
+  'classics:1:3':  'Tim Buckley - Lorca',
+  'classics:1:4':  'Tim Buckley - Starsailor',
+  'classics:1:5':  'Tears for Fears - Songs from the Big Chair',
+  'classics:1:6':  'The United States of America - The United States of America',
+  'classics:1:7':  'Pink Floyd - The Piper at the Gates of Dawn',
+  'classics:1:8':  'Pink Floyd - The Dark Side of the Moon',
+  'classics:1:9':  'Pink Floyd - Wish You Were Here',
+  'classics:1:10': 'Wire - Pink Flag',
+  'classics:1:11': "The Beach Boys - Surf's Up",
+  // Classics — row C
+  'classics:2:0':  'Talking Heads - Fear of Music',
+  'classics:2:1':  'Joy Division - Unknown Pleasures',
+  'classics:2:2':  'Joy Division - Closer',
+  'classics:2:3':  'New Order - Power, Corruption & Lies',
+  'classics:2:4':  'The Gun Club - Fire of Love',
+  'classics:2:5':  'Lou Reed - Transformer',
+  'classics:2:6':  'Iggy Pop - Lust for Life',
+  'classics:2:7':  'The Stooges - Fun House',
+  'classics:2:8':  'Swans - Filth',
+  'classics:2:9':  'Swans - Children of God',
+  'classics:2:10': "Dinosaur Jr. - You're Living All Over Me",
+  'classics:2:11': 'Einstürzende Neubauten - Halber Mensch',
+  // Classics — row D
+  'classics:3:0':  'Foetus - Nail',
+  'classics:3:1':  'The Cure - Disintegration',
+  'classics:3:2':  'Jefferson Airplane - Volunteers',
+  'classics:3:3':  'Neil Young - After the Gold Rush',
+  'classics:3:4':  'Pere Ubu - The Modern Dance',
+  'classics:3:5':  'The Pop Group - Y',
+  'classics:3:6':  'Gang of Four - Entertainment!',
+  'classics:3:7':  'Lizzy Mercier Descloux - Press Color',
+  'classics:3:8':  'Sonic Youth - Daydream Nation',
+  'classics:3:9':  'Sonic Youth - Sister',
+  'classics:3:10': 'Sonic Youth - EVOL',
+  'classics:3:11': 'Various Artists - No New York',
+  // Classics — row E
+  'classics:4:0':  'King Crimson - Discipline',
+  'classics:4:1':  "King Crimson - Larks' Tongues in Aspic",
+  'classics:4:2':  'King Crimson - Red',
+  'classics:4:3':  'This Heat - Deceit',
+  'classics:4:4':  'David Bowie - Low',
+  'classics:4:5':  'David Bowie - The Rise and Fall of Ziggy Stardust and the Spiders from Mars',
+  'classics:4:6':  'Jackson C. Frank - Jackson C. Frank',
+  'classics:4:7':  'The Smiths - The Queen Is Dead',
+  'classics:4:8':  "John Fahey - Fare Forward Voyagers (Soldier's Choice)",
+  'classics:4:9':  'Comus - First Utterance',
+  'classics:4:10': 'Exuma - Exuma',
+  'classics:4:11': 'Os Mutantes - Os Mutantes',
+  // Classics — row F
+  'classics:5:0':  'Devo - Q: Are We Not Men? A: We Are Devo!',
+  'classics:5:1':  'Coil - Horse Rotorvator',
+  'classics:5:2':  'Throbbing Gristle - 20 Jazz Funk Greats',
+  'classics:5:3':  'Henry Cow - In Praise of Learning',
+  'classics:5:4':  'Talk Talk - Spirit of Eden',
+  'classics:5:5':  'Soft Machine - Third',
+  'classics:5:6':  'MC5 - Kick Out the Jams',
+  'classics:5:7':  'Captain Beefheart & His Magic Band - Safe As Milk',
+  'classics:5:8':  'The Residents - Not Available',
+  'classics:5:9':  'Can - Tago Mago',
+  'classics:5:10': 'Can - Future Days',
+  'classics:5:11': 'Daniel Johnston - Hi, How Are You',
+  // Classics — row G
+  'classics:6:0':  'Black Flag - Damaged',
+  'classics:6:1':  'Minor Threat - Complete Discography',
+  'classics:6:2':  'Bad Brains - Bad Brains',
+  'classics:6:3':  'R.E.M. - Murmur',
+  'classics:6:4':  'Madness - One Step Beyond',
+  'classics:6:5':  'Cocteau Twins - Treasure',
+  'classics:6:6':  'Hüsker Dü - Zen Arcade',
+  'classics:6:7':  'Minutemen - Double Nickels on the Dime',
+  'classics:6:8':  'Led Zeppelin - Led Zeppelin IV',
+  'classics:6:9':  'My Bloody Valentine - You Made Me Realise',
+  'classics:6:10': "My Bloody Valentine - Isn't Anything",
+  'classics:6:11': 'Steely Dan - Aja',
+  // Classics — row H
+  'classics:7:0':  'Glenn Branca - The Ascension',
+  'classics:7:1':  'Brian Eno - Another Green World',
+  'classics:7:2':  'Nick Cave & The Bad Seeds - Tender Prey',
+  'classics:7:3':  'Television - Marquee Moon',
+  'classics:7:4':  'Neu! - Neu!',
+  'classics:7:5':  'Popol Vuh - Hosianna Mantra',
+  'classics:7:6':  'Funkadelic - Maggot Brain',
+  'classics:7:7':  "The Who - Who's Next",
+  'classics:7:8':  'Faust - Faust',
+  'classics:7:9':  'Robert Wyatt - Rock Bottom',
+  'classics:7:10': 'Kate Bush - Hounds of Love',
+  'classics:7:11': "Butthole Surfers - Psychic... Powerless... Another Man's Sac",
+  // Classics — row I
+  'classics:8:0':  'Bob Dylan - Blonde on Blonde',
+  'classics:8:1':  'Bob Dylan - Blood on the Tracks',
+  'classics:8:2':  'Galaxie 500 - On Fire',
+  'classics:8:3':  'Violent Femmes - Violent Femmes',
+  'classics:8:4':  'Amon Düül II - Yeti',
+  'classics:8:5':  'The Zombies - Odessey and Oracle',
+  'classics:8:6':  'Prince - Purple Rain',
+  'classics:8:7':  'Fleetwood Mac - Rumours',
+  'classics:8:8':  'The Jesus and Mary Chain - Psychocandy',
+  'classics:8:9':  'Public Image Ltd. - Second Edition',
+  'classics:8:10': 'The Red Krayola - The Parable of Arable Land',
+  'classics:8:11': 'Suicide - Suicide',
+  // Classics — row J
+  'classics:9:0':  'Syd Barrett - The Madcap Laughs',
+  'classics:9:1':  'Frank Zappa - Hot Rats',
+  'classics:9:2':  'Frank Zappa - Freak Out!',
+  'classics:9:3':  'Jimi Hendrix - Are You Experienced?',
+  'classics:9:4':  'Pixies - Doolittle',
+  'classics:9:5':  'Pixies - Surfer Rosa',
+  'classics:9:6':  'Curtis Mayfield - Superfly',
+  'classics:9:7':  'The Replacements - Let It Be',
+  'classics:9:8':  'Big Black - Songs About Fucking',
+  'classics:9:9':  'Beat Happening - Beat Happening',
+  'classics:9:10': 'Genesis - Selling England by the Pound',
+  'classics:9:11': 'Elvis Presley - Elvis Presley',
+  // Classics — row K
+  'classics:10:0':  'Mission of Burma - Vs.',
+  'classics:10:1':  'Dead Kennedys - Fresh Fruit for Rotting Vegetables',
+  'classics:10:2':  'Chrome - Half Machine Lip Moves',
+  'classics:10:3':  'The Stone Roses - The Stone Roses',
+  'classics:10:4':  'Bruce Springsteen - Born to Run',
+  'classics:10:5':  'Nick Drake - Pink Moon',
+  'classics:10:6':  'Nick Drake - Bryter Layter',
+  'classics:10:7':  'Van Morrison - Astral Weeks',
+  'classics:10:8':  'The Clash - London Calling',
+  'classics:10:9':  'Nico - Desertshore',
+  'classics:10:10': 'Grateful Dead - American Beauty',
+  'classics:10:11': 'Van Dyke Parks - Song Cycle',
+
+  // Hip-Hop — row A
+  'hiphop:0:0':  'Public Enemy - It Takes a Nation of Millions to Hold Us Back',
+  'hiphop:0:1':  "Beastie Boys - Paul's Boutique",
+  'hiphop:0:2':  'De La Soul - 3 Feet High and Rising',
+  'hiphop:0:3':  'Eric B. & Rakim - Paid in Full',
+  'hiphop:0:4':  'N.W.A. - Straight Outta Compton',
+  'hiphop:0:5':  'Slick Rick - The Great Adventures of Slick Rick',
+  'hiphop:0:6':  'Wu-Tang Clan - Enter the Wu-Tang (36 Chambers)',
+  'hiphop:0:7':  'Nas - Illmatic',
+  'hiphop:0:8':  'DJ Shadow - Endtroducing.....',
+  'hiphop:0:9':  'GZA - Liquid Swords',
+  'hiphop:0:10': 'A Tribe Called Quest - The Low End Theory',
+  'hiphop:0:11': 'OutKast - Aquemini',
+  // Hip-Hop — row B
+  'hiphop:1:0':  'The Notorious B.I.G. - Ready to Die',
+  'hiphop:1:1':  'Mobb Deep - The Infamous',
+  'hiphop:1:2':  'cLOUDDEAD - cLOUDDEAD',
+  'hiphop:1:3':  'Raekwon - Only Built 4 Cuban Linx...',
+  'hiphop:1:4':  'Gang Starr - Moment of Truth',
+  'hiphop:1:5':  'Big L - Lifestylez Ov da Poor & Dangerous',
+  'hiphop:1:6':  'The Pharcyde - Bizarre Ride II: The Pharcyde',
+  'hiphop:1:7':  'Black Star - Black Star',
+  'hiphop:1:8':  'The Roots - Things Fall Apart',
+  'hiphop:1:9':  'Snoop Dogg - Doggystyle',
+  'hiphop:1:10': 'Dr. Dre - The Chronic',
+  'hiphop:1:11': 'Pete Rock & C.L. Smooth - Mecca and the Soul Brother',
+  // Hip-Hop — row C
+  'hiphop:2:0':  'Digable Planets - Blowout Comb',
+  'hiphop:2:1':  'MF DOOM - Operation: Doomsday',
+  'hiphop:2:2':  '2Pac - All Eyez on Me',
+  'hiphop:2:3':  'Madvillain - Madvillainy',
+  'hiphop:2:4':  'J Dilla - Donuts',
+  'hiphop:2:5':  'Kanye West - Late Registration',
+  'hiphop:2:6':  'Deltron 3030 - Deltron 3030',
+  'hiphop:2:7':  'Jay-Z - The Blueprint',
+  'hiphop:2:8':  'Ghostface Killah - Supreme Clientele',
+  'hiphop:2:9':  'Three 6 Mafia - Mystic Stylez',
+  'hiphop:2:10': 'Clipse - Hell Hath No Fury',
+  'hiphop:2:11': 'dälek - Absence',
+  // Hip-Hop — row D
+  'hiphop:3:0':  'Common - Like Water for Chocolate',
+  'hiphop:3:1':  'Dr. Octagon - Dr. Octagonecologyst',
+  'hiphop:3:2':  'RJD2 - Deadringer',
+  'hiphop:3:3':  'Kid Koala - Some of My Best Friends Are DJs',
+  'hiphop:3:4':  'Eminem - The Marshall Mathers LP',
+  'hiphop:3:5':  'CunninLynguists - A Piece of Strange',
+  'hiphop:3:6':  'Nujabes - Modal Soul',
+  'hiphop:3:7':  'Run the Jewels - Run the Jewels 2',
+  'hiphop:3:8':  'Danny Brown - XXX',
+  'hiphop:3:9':  'Death Grips - the powers that b',
+  'hiphop:3:10': 'Lil Ugly Mane - Mista Thug Isolation',
+  'hiphop:3:11': 'Kendrick Lamar - To Pimp a Butterfly',
+
+  // Bleeps — row A
+  'bleeps:0:0':  'Kraftwerk - Die Mensch-Maschine',
+  'bleeps:0:1':  'Orbital - In Sides',
+  'bleeps:0:2':  'Klaus Schulze - Irrlicht',
+  'bleeps:0:3':  'Jean-Michel Jarre - Oxygène',
+  'bleeps:0:4':  'Tangerine Dream - Rubycon',
+  'bleeps:0:5':  'Walter Gibbons - Jungle Music',
+  'bleeps:0:6':  'Manuel Göttsching - E2-E4',
+  'bleeps:0:7':  "People's Choice - Larry Levan Live at the Paradise Garage",
+  'bleeps:0:8':  'Squarepusher - Hard Normal Daddy',
+  'bleeps:0:9':  'Autechre - Tri Repetae',
+  'bleeps:0:10': 'Massive Attack - Mezzanine',
+  'bleeps:0:11': 'Flying Lotus - Cosmogramma',
+  // Bleeps — row B
+  'bleeps:1:0':  'Global Communication - 76:14',
+  'bleeps:1:1':  'Brian Eno - Ambient 1: Music for Airports',
+  'bleeps:1:2':  'Aphex Twin - Selected Ambient Works 85-92',
+  'bleeps:1:3':  "The Orb - The Orb's Adventures Beyond the Ultraworld",
+  'bleeps:1:4':  'Biosphere - Substrata',
+  'bleeps:1:5':  'Daft Punk - Discovery',
+  'bleeps:1:6':  'Ken Ishii - Jelly Tones',
+  'bleeps:1:7':  'Jeff Mills - Live at the Liquid Room, Tokyo',
+  'bleeps:1:8':  'Robert Hood - Minimal Nation',
+  'bleeps:1:9':  'Gas - Pop',
+  'bleeps:1:10': 'Ryoji Ikeda - Dataplex',
+  'bleeps:1:11': 'Underworld - Second Toughest in the Infants',
+  // Bleeps — row C
+  'bleeps:2:0':  'Goldie - Timeless',
+  'bleeps:2:1':  'Oneohtrix Point Never - Replica',
+  'bleeps:2:2':  'Jon Hopkins - Immunity',
+  'bleeps:2:3':  'Porter Ricks - Biokinetics',
+  'bleeps:2:4':  'Air - Moon Safari',
+  'bleeps:2:5':  'Amon Tobin - Bricolage',
+  'bleeps:2:6':  'Burial - Untrue',
+  'bleeps:2:7':  'The Chemical Brothers - Dig Your Own Hole',
+  'bleeps:2:8':  'Venetian Snares - Rossz Csillag Alatt Született',
+  'bleeps:2:9':  'Alec Empire - The Destroyer',
+  'bleeps:2:10': 'Arca - Mutant',
+  'bleeps:2:11': 'Andy Stott - Faith in Strangers',
+  // Bleeps — row D
+  'bleeps:3:0':  'µ-Ziq - Lunatic Harness',
+  'bleeps:3:1':  'Kevin Saunderson - Faces & Phases',
+  'bleeps:3:2':  'Derrick May - Innovator',
+  'bleeps:3:3':  'Justice - †',
+  'bleeps:3:4':  'The Knife - Silent Shout',
+  'bleeps:3:5':  'Luomo - Vocalcity',
+  'bleeps:3:6':  'Juan Atkins - 20 Years 1985–2005',
+  'bleeps:3:7':  'The Future Sound of London - Lifeforms',
+  'bleeps:3:8':  'James Ferraro - Far Side Virtual',
+  'bleeps:3:9':  'The Field - From Here We Go Sublime',
+  'bleeps:3:10': 'Basic Channel - BCD-2',
+  'bleeps:3:11': 'Boards of Canada - Music Has the Right to Children',
+
+  // Jazz — row A
+  'jazz:0:0':  'Miles Davis - Kind of Blue',
+  'jazz:0:1':  'Ornette Coleman - The Shape of Jazz to Come',
+  'jazz:0:2':  'Thelonious Monk - Brilliant Corners',
+  'jazz:0:3':  'Charles Mingus - Mingus Ah Um',
+  'jazz:0:4':  'The Dave Brubeck Quartet - Time Out',
+  'jazz:0:5':  'Sonny Rollins - Saxophone Colossus',
+  'jazz:0:6':  "Art Blakey & The Jazz Messengers - Moanin'",
+  'jazz:0:7':  "Cannonball Adderley - Somethin' Else",
+  'jazz:0:8':  'John Coltrane - Blue Train',
+  'jazz:0:9':  'Frank Sinatra - In the Wee Small Hours',
+  'jazz:0:10': 'Chet Baker - Chet',
+  'jazz:0:11': 'Sun Ra - Lanquidity',
+  // Jazz — row B
+  'jazz:1:0':  'Miles Davis - In a Silent Way',
+  'jazz:1:1':  'John Coltrane - A Love Supreme',
+  'jazz:1:2':  'John Coltrane - Ascension',
+  'jazz:1:3':  'Charles Mingus - The Black Saint and the Sinner Lady',
+  'jazz:1:4':  'Eric Dolphy - Out to Lunch!',
+  'jazz:1:5':  'Pharoah Sanders - Karma',
+  'jazz:1:6':  'Sun Ra and His Astro Infinity Arkestra - Atlantis',
+  'jazz:1:7':  'Andrew Hill - Point of Departure',
+  'jazz:1:8':  'Cecil Taylor - Unit Structures',
+  'jazz:1:9':  'Albert Ayler - Spiritual Unity',
+  'jazz:1:10': 'Peter Brötzmann - Machine Gun',
+  'jazz:1:11': 'Bill Evans - Waltz for Debby',
+  // Jazz — row C
+  'jazz:2:0':  'Miles Davis - Bitches Brew',
+  'jazz:2:1':  'Keith Jarrett - The Köln Concert',
+  'jazz:2:2':  'Alice Coltrane - Journey in Satchidananda',
+  'jazz:2:3':  'Bill Evans Trio - Sunday at the Village Vanguard',
+  'jazz:2:4':  'Herbie Hancock - Head Hunters',
+  'jazz:2:5':  'Stan Getz & João Gilberto - Getz/Gilberto',
+  'jazz:2:6':  "Max Roach - We Insist! Max Roach's Freedom Now Suite",
+  'jazz:2:7':  'Grant Green - Idle Moments',
+  'jazz:2:8':  'Duke Ellington - Money Jungle',
+  'jazz:2:9':  'Wayne Shorter - Speak No Evil',
+  'jazz:2:10': 'Esbjörn Svensson Trio - Viaticum',
+  'jazz:2:11': 'John Zorn - Naked City',
+  // Jazz — row D
+  'jazz:3:0':  'Horace Silver - Song for My Father',
+  'jazz:3:1':  'Duke Ellington - Far East Suite',
+  'jazz:3:2':  'Lee Morgan - The Sidewinder',
+  'jazz:3:3':  'Ryo Fukui - Scenery',
+  'jazz:3:4':  'Ornette Coleman - Free Jazz',
+  'jazz:3:5':  'Sonny Sharrock - Ask the Ages',
+  'jazz:3:6':  'Freddie Hubbard - Red Clay',
+  'jazz:3:7':  'Moondog - Moondog',
+  'jazz:3:8':  'Kamasi Washington - The Epic',
+  'jazz:3:9':  'The Seatbelts - Cowboy Bebop',
+  'jazz:3:10': 'The Necks - Sex',
+  'jazz:3:11': 'Fire! Orchestra - Exit!',
+
+  // Metal — row A
+  'metal:0:0':  'Black Sabbath - Paranoid',
+  'metal:0:1':  'Metallica - Master of Puppets',
+  'metal:0:2':  'Megadeth - Rust in Peace',
+  'metal:0:3':  'Slayer - Reign in Blood',
+  'metal:0:4':  'Candlemass - Epicus Doomicus Metallicus',
+  'metal:0:5':  'Bathory - Blood Fire Death',
+  'metal:0:6':  'Death - Human',
+  'metal:0:7':  'Morbid Angel - Altars of Madness',
+  'metal:0:8':  'Vektor - Outer Isolation',
+  'metal:0:9':  'Iron Maiden - Powerslave',
+  'metal:0:10': 'Kyuss - Welcome to Sky Valley',
+  'metal:0:11': 'Burzum - Filosofem',
+  // Metal — row B
+  'metal:1:0':  "Dissection - Storm of the Light's Bane",
+  'metal:1:1':  'Ulver - Bergtatt - Et eeventyr i 5 capitler',
+  'metal:1:2':  'Immortal - At the Heart of Winter',
+  'metal:1:3':  'Neurosis - Through Silver in Blood',
+  'metal:1:4':  'Liturgy - Aesthethica',
+  'metal:1:5':  'Gorguts - Obscura',
+  'metal:1:6':  'Darkthrone - Transilvanian Hunger',
+  'metal:1:7':  'Earth - Earth 2',
+  'metal:1:8':  'Sunn O))) - Monoliths & Dimensions',
+  'metal:1:9':  'Sleep - Dopesmoker',
+  'metal:1:10': 'Electric Wizard - Dopethrone',
+  'metal:1:11': 'Peste Noire - La Sanie des siècles - Panégyrique de la dégénérescence',
+  // Metal — row C
+  'metal:2:0':  'Type O Negative - Bloody Kisses',
+  'metal:2:1':  'Summoning - Stronghold',
+  'metal:2:2':  'Pig Destroyer - Prowler in the Yard',
+  'metal:2:3':  'Converge - Jane Doe',
+  'metal:2:4':  'Atheist - Unquestionable Presence',
+  'metal:2:5':  'Melvins - Houdini',
+  'metal:2:6':  'Demilich - Nespithe',
+  'metal:2:7':  'Agalloch - The Mantle',
+  'metal:2:8':  'Isis - Panopticon',
+  'metal:2:9':  'Mastodon - Leviathan',
+  'metal:2:10': 'Boris - Boris at Last -Feedbacker-',
+  'metal:2:11': 'Deftones - Saturday Night Wrist',
+  // Metal — row D
+  'metal:3:0':  'Napalm Death - Scum',
+  'metal:3:1':  'Cryptopsy - None So Vile',
+  'metal:3:2':  'Opeth - Blackwater Park',
+  'metal:3:3':  'maudlin of the Well - Bath',
+  'metal:3:4':  'Discordance Axis - The Inalienable Dreamless',
+  'metal:3:5':  'Murmuüre - Murmuüre',
+  'metal:3:6':  'Primus - Frizzle Fry',
+  'metal:3:7':  'The Angelic Process - Weighing Souls with Sand',
+  'metal:3:8':  'Acid Bath - When the Kite String Pops',
+  'metal:3:9':  'Deathspell Omega - Paracletus',
+  'metal:3:10': 'Korn - Korn',
+  'metal:3:11': 'Deafheaven - Sunbather',
+};
+
+const LS_KEY = 'mu-tracker:v2:state';
+const LS_TOKENS = 'mu-tracker:v2:tokens';
+const LS_HIGHWATER = 'mu-tracker:v2:highwater';
+const LS_PICKED = 'mu-tracker:v2:picked';
+const REWARD_EVERY = 10;
+const TOTAL = SECTIONS.reduce((sum, s) => sum + s.rows * s.cols, 0);
+let crossed = new Set(JSON.parse(localStorage.getItem(LS_KEY) || '[]'));
+let tokens = parseInt(localStorage.getItem(LS_TOKENS) || '0', 10);
+let highWater = parseInt(localStorage.getItem(LS_HIGHWATER) || '0', 10);
+let pickedKey = localStorage.getItem(LS_PICKED) || null;
+let isAnimating = false;
+
+// If a stored pick was already crossed off in another tab/manually, release it.
+if (pickedKey && crossed.has(pickedKey)) {
+  pickedKey = null;
+  localStorage.removeItem(LS_PICKED);
+}
+
+const stage = document.getElementById('stage');
+const xCount = document.getElementById('x-count');
+const xTotal = document.getElementById('x-total');
+const progressFill = document.getElementById('progress-fill');
+const pickLabel = document.getElementById('pick-label');
+const skipBar = document.getElementById('skip-bar');
+const skipCount = document.getElementById('skip-count');
+const btnSkip = document.getElementById('btn-skip');
+const spotlight = document.getElementById('spotlight');
+const catcher = document.getElementById('dismiss-catcher');
+const btnPick = document.getElementById('btn-pick');
+
+xTotal.textContent = TOTAL;
+
+// Catch up any milestone rewards that were missed (e.g. if albums were crossed
+// off before the tokens feature existed, or before this code ran).
+checkRewards();
+
+// One-time migration: an earlier version under-awarded tokens for users who
+// had a large pre-existing cross-off set. Recompute the expected token count
+// from highWater and bump up if needed. Never decreases tokens (so anyone
+// who used skips keeps their actual balance). Runs once per browser.
+(function migrateTokens_v1() {
+  const FLAG = 'mu-tracker:v2:tokens_migrated_v1';
+  if (localStorage.getItem(FLAG)) return;
+  const expected = Math.floor(highWater / REWARD_EVERY);
+  if (tokens < expected) {
+    tokens = expected;
+    localStorage.setItem(LS_TOKENS, tokens);
+  }
+  localStorage.setItem(FLAG, '1');
+})();
+
+function updateProgress() {
+  xCount.textContent = crossed.size;
+  const pct = crossed.size / TOTAL * 100;
+  progressFill.style.width = pct + '%';
+  document.getElementById('x-percent').textContent = Math.round(pct) + '%';
+  updateLockState();
+  updateSkipBar();
+}
+
+/* Update the skip-bar display (count + button visibility). */
+function updateSkipBar() {
+  skipCount.textContent = `${tokens} skip${tokens === 1 ? '' : 's'}`;
+  btnSkip.style.display = tokens > 0 ? 'inline-block' : 'none';
+}
+
+/* Lifetime crosses high-water mark. When it advances past a multiple of
+   REWARD_EVERY, award one skip token. Un-crossing does not deduct. */
+function checkRewards() {
+  let awarded = 0;
+  while (crossed.size > highWater) {
+    highWater++;
+    if (highWater % REWARD_EVERY === 0) {
+      tokens++;
+      awarded++;
+    }
+  }
+  if (awarded > 0) {
+    localStorage.setItem(LS_TOKENS, tokens);
+  }
+  localStorage.setItem(LS_HIGHWATER, highWater);
+}
+
+function render() {
+  stage.querySelectorAll('.section').forEach(n => n.remove());
+  SECTIONS.forEach(sec => {
+    const div = document.createElement('div');
+    div.className = 'section';
+    div.dataset.sectionId = sec.id;
+    div.style.top = sec.top + '%';
+    div.style.left = sec.left + '%';
+    div.style.width = sec.width + '%';
+    div.style.height = sec.height + '%';
+    div.style.gridTemplateColumns = `repeat(${sec.cols}, 1fr)`;
+    div.style.gridTemplateRows = `repeat(${sec.rows}, 1fr)`;
+
+    for (let r = 0; r < sec.rows; r++) {
+      for (let c = 0; c < sec.cols; c++) {
+        const cell = document.createElement('div');
+        cell.className = 'cell';
+        const key = `${sec.id}:${r}:${c}`;
+        cell.dataset.key = key;
+        if (crossed.has(key)) cell.classList.add('x');
+        cell.addEventListener('click', () => {
+          if (isAnimating) return;
+          // Clicking the picked album crosses it off + clears the lock.
+          const wasPicked = (pickedKey === key);
+          if (cell.classList.toggle('x')) crossed.add(key);
+          else crossed.delete(key);
+          localStorage.setItem(LS_KEY, JSON.stringify([...crossed]));
+          checkRewards();
+          updateProgress();
+          if (wasPicked) clearPick();
+        });
+        // Insert sections BEFORE the spotlight element so spotlight stays on top
+        stage.insertBefore(div, spotlight);
+        // (only the section div is inserted once; cells are appended to it)
+        div.appendChild(cell);
+      }
+    }
+  });
+  updateProgress();
+}
+
+function formatPosition(sec, r, c) {
+  const key = `${sec.id}:${r}:${c}`;
+  if (ALBUMS[key]) return ALBUMS[key];
+  // Fallback if the album isn't in the lookup
+  if (sec.rows === 1 && sec.cols === 1) return sec.label;
+  const rowLetter = String.fromCharCode(65 + r);
+  return `${sec.label} ${rowLetter}-${c + 1}`;
+}
+
+/* Position the spotlight rectangle exactly over a given cell within #stage.
+   The rectangle is inset 1px on every side so the golden outline aligns with
+   the album cover rather than the slightly-larger grid cell. */
+function positionSpotlightOnCell(cell) {
+  const cellRect = cell.getBoundingClientRect();
+  const stageRect = stage.getBoundingClientRect();
+  spotlight.style.left   = (cellRect.left - stageRect.left + 1) + 'px';
+  spotlight.style.top    = (cellRect.top  - stageRect.top  + 1) + 'px';
+  spotlight.style.width  = (cellRect.width  - 2) + 'px';
+  spotlight.style.height = (cellRect.height - 2) + 'px';
+  spotlight.style.display = 'block';
+}
+
+/* Lock state visuals: button shows the "locked" style while a pick is pending,
+   but it stays clickable — clicking it re-shows the existing pick instead of
+   re-randomizing. Only disabled outright while the spin animation is running. */
+function updateLockState() {
+  btnPick.disabled = isAnimating;
+  btnPick.classList.toggle('locked', !!pickedKey && !isAnimating);
+}
+
+/* Re-display the existing locked pick: spotlight + dim + scroll to it. */
+function reshowExistingPick() {
+  if (!pickedKey) return;
+  const cell = stage.querySelector(`.cell[data-key="${CSS.escape(pickedKey)}"]`);
+  if (!cell) return;
+  cell.classList.add('pick');
+  positionSpotlightOnCell(cell);
+  catcher.style.display = 'block';
+  spotlight.classList.remove('spinning');
+  pickLabel.style.display = 'inline';
+  skipBar.style.display = 'flex';
+  updateSkipBar();
+  cell.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+/* Land on a specific cell — this is the FINAL state of the randomization. */
+function landOnPick(sec, r, c) {
+  const key = `${sec.id}:${r}:${c}`;
+  const cell = stage.querySelector(`.cell[data-key="${CSS.escape(key)}"]`);
+  if (!cell) return;
+
+  pickedKey = key;
+  localStorage.setItem(LS_PICKED, key);
+  stage.querySelectorAll('.cell.pick').forEach(n => n.classList.remove('pick'));
+  cell.classList.add('pick');
+
+  positionSpotlightOnCell(cell);
+  catcher.style.display = 'block';
+  spotlight.classList.remove('spinning'); // resume pulsing
+  pickLabel.textContent = formatPosition(sec, r, c);
+  pickLabel.style.display = 'inline';
+  skipBar.style.display = 'flex';
+  updateSkipBar();
+
+  cell.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+  isAnimating = false;
+  updateLockState();
+}
+
+/* Clear the pick fully — used when picked album is crossed off, or on Reset. */
+function clearPick() {
+  pickedKey = null;
+  localStorage.removeItem(LS_PICKED);
+  isAnimating = false;
+  stage.querySelectorAll('.cell.pick').forEach(n => n.classList.remove('pick'));
+  spotlight.classList.remove('spinning');
+  spotlight.style.display = 'none';
+  catcher.style.display = 'none';
+  pickLabel.style.display = 'none';
+  pickLabel.textContent = '';
+  skipBar.style.display = 'none';
+  updateLockState();
+}
+
+/* Dismiss the entire randomization focus mode visually — spotlight, dim,
+   pulse on the picked cell, the pick label, and the skip bar all hide.
+   The lock state (pickedKey) persists so the button stays locked; hitting
+   Randomize again restores the whole view. */
+function dismissSpotlight() {
+  if (isAnimating) return;
+  spotlight.style.display = 'none';
+  catcher.style.display = 'none';
+  stage.querySelectorAll('.cell.pick').forEach(n => n.classList.remove('pick'));
+  pickLabel.style.display = 'none';
+  skipBar.style.display = 'none';
+}
+
+/* Run the slot-machine spin: rapidly jump the spotlight through random cells
+   in the pool, decelerating, then land on the final pick. */
+function runSpin(pool, final) {
+  isAnimating = true;
+  updateLockState();
+
+  catcher.style.display = 'block';
+  spotlight.classList.add('spinning');
+  // Hide the pick label + skip bar during the spin so we don't spoil the result
+  pickLabel.style.display = 'none';
+  skipBar.style.display = 'none';
+  stage.querySelectorAll('.cell.pick').forEach(n => n.classList.remove('pick'));
+
+  // 4 intermediate stops, decelerating, then the 5th stop is the final pick.
+  // Delays are longer than typical browser smooth-scroll duration (~500ms)
+  // so the viewport settles on each cell before the next jump.
+  // The 1st step gets extra headroom because the scroll distance from the
+  // user's current view to a random cell can be large.
+  const DELAYS = [1100, 900, 1100, 1400];
+  let i = 0;
+
+  function step() {
+    if (i < DELAYS.length) {
+      // Pick a random intermediate (not necessarily the final).
+      const intermediate = pool[Math.floor(Math.random() * pool.length)];
+      const key = `${intermediate.sec.id}:${intermediate.r}:${intermediate.c}`;
+      const cell = stage.querySelector(`.cell[data-key="${CSS.escape(key)}"]`);
+      if (cell) {
+        // Smooth-scroll viewport to follow the spotlight so the user always sees it.
+        cell.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' });
+        positionSpotlightOnCell(cell);
+      }
+      setTimeout(step, DELAYS[i]);
+      i++;
+    } else {
+      // Land — smooth scroll for graceful settle into the final pick.
+      landOnPick(final.sec, final.r, final.c);
+    }
+  }
+
+  step();
+}
+
+btnPick.addEventListener('click', () => {
+  if (isAnimating) return;
+
+  // If a pick is locked (not yet crossed off), don't re-randomize — just
+  // bring the user back to it.
+  if (pickedKey) {
+    reshowExistingPick();
+    return;
+  }
+
+  // Pool of all non-crossed cells
+  const pool = [];
+  SECTIONS.forEach(sec => {
+    for (let r = 0; r < sec.rows; r++) {
+      for (let c = 0; c < sec.cols; c++) {
+        const key = `${sec.id}:${r}:${c}`;
+        if (!crossed.has(key)) pool.push({ sec, r, c });
+      }
+    }
+  });
+  if (pool.length === 0) {
+    alert("You've crossed off every album. Mutant status achieved.");
+    return;
+  }
+  const final = pool[Math.floor(Math.random() * pool.length)];
+  runSpin(pool, final);
+});
+
+btnSkip.addEventListener('click', () => {
+  if (isAnimating || !pickedKey || tokens <= 0) return;
+
+  // Deduct a token
+  tokens--;
+  localStorage.setItem(LS_TOKENS, tokens);
+
+  // Wipe current pick state (without crossing off the album)
+  pickedKey = null;
+  localStorage.removeItem(LS_PICKED);
+  stage.querySelectorAll('.cell.pick').forEach(n => n.classList.remove('pick'));
+  pickLabel.style.display = 'none';
+  // Keep skipBar visible — runSpin will show it on land
+
+  // Build pool of remaining non-crossed cells and spin again
+  const pool = [];
+  SECTIONS.forEach(sec => {
+    for (let r = 0; r < sec.rows; r++) {
+      for (let c = 0; c < sec.cols; c++) {
+        const key = `${sec.id}:${r}:${c}`;
+        if (!crossed.has(key)) pool.push({ sec, r, c });
+      }
+    }
+  });
+  if (pool.length === 0) {
+    clearPick();
+    alert("You've crossed off every album. Mutant status achieved.");
+    return;
+  }
+  const final = pool[Math.floor(Math.random() * pool.length)];
+  runSpin(pool, final);
+});
+
+catcher.addEventListener('click', dismissSpotlight);
+document.addEventListener('keydown', e => {
+  // Don't hijack keys when typing in a form field (none currently, but defensive).
+  if (e.target.matches && e.target.matches('input, textarea, [contenteditable]')) return;
+
+  if (e.key === 'Escape') dismissSpotlight();
+  if (e.code === 'Space') {
+    e.preventDefault(); // stop the default page-scroll behavior
+    handleMenuToggle();
+  }
+  if ((e.key === 'r' || e.key === 'R') && !e.metaKey && !e.ctrlKey && !e.altKey) {
+    e.preventDefault();
+    btnPick.click();
+  }
+});
+
+// On resize, if a pick is locked, reposition the spotlight on the picked cell
+// so the highlight follows the layout (don't lose lock state).
+window.addEventListener('resize', () => {
+  if (!pickedKey || isAnimating) return;
+  const cell = stage.querySelector(`.cell[data-key="${CSS.escape(pickedKey)}"]`);
+  if (cell && spotlight.style.display !== 'none') positionSpotlightOnCell(cell);
+});
+
+function initChart() {
+  render();
+  // If a pick was persisted from a previous session, only restore the lock state
+  // on the Randomize button. The pick label, skip bar, and spotlight stay hidden
+  // until the user clicks Randomize again (which calls reshowExistingPick and
+  // pre-populates the pick label from pickedKey at that point).
+  if (pickedKey) {
+    const [sectionId, rStr, cStr] = pickedKey.split(':');
+    const sec = SECTIONS.find(s => s.id === sectionId);
+    if (sec) {
+      pickLabel.textContent = formatPosition(sec, parseInt(rStr, 10), parseInt(cStr, 10));
+    }
+    updateLockState();
+  }
+}
+
+(function bootChart() {
+  const img = document.getElementById('chart');
+  // The chart src is a base64 data URL set before this script runs. If the image
+  // is already decoded by now, the `load` event has already fired and won't fire
+  // again — call init immediately. Otherwise wait for `load`.
+  if (img.complete && img.naturalWidth > 0) {
+    initChart();
+  } else {
+    img.addEventListener('load', initChart, { once: true });
+    // Also handle the failure case so we don't sit with a blank chart forever.
+    img.addEventListener('error', () => console.error('chart image failed to load'), { once: true });
+  }
+})();
+
+document.getElementById('btn-peek').addEventListener('click', e => {
+  const on = document.body.classList.toggle('peek');
+  e.currentTarget.classList.toggle('active', on);
+});
+
+/* Toggle handler: if any UI overlay is open (menu OR randomizer spotlight),
+   the chevron closes everything. Otherwise it opens the menu. */
+function handleMenuToggle() {
+  const menuOpen = document.body.classList.contains('actions-open');
+  const randomizerShowing = !!pickedKey && spotlight.style.display !== 'none';
+  if (menuOpen || randomizerShowing) {
+    document.body.classList.remove('actions-open');
+    if (randomizerShowing) dismissSpotlight();
+  } else {
+    document.body.classList.add('actions-open');
+  }
+}
+
+document.getElementById('btn-toggle').addEventListener('click', handleMenuToggle);
+
+/* Export the current state of the chart as a JPG.
+   Mirrors the on-screen treatment of crossed-off cells:
+   - Peek OFF → solid #242424 fill
+   - Peek ON  → semi-transparent fill so cover bleeds through. */
+document.getElementById('btn-export').addEventListener('click', () => {
+  const defaultName = `mu-progress-${crossed.size}-of-${TOTAL}.jpg`;
+  const input = prompt('Save screenshot as:', defaultName);
+  if (!input) return;
+  const filename = /\.jpe?g$/i.test(input) ? input : input + '.jpg';
+
+  const img = document.getElementById('chart');
+  // Use the natural image dimensions for max quality output.
+  const W = img.naturalWidth  || 1781;
+  const H = img.naturalHeight || 4325;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d');
+
+  // 1. Draw the chart
+  ctx.drawImage(img, 0, 0, W, H);
+
+  // 2. Overlay the same color used in the live UI
+  const peek = document.body.classList.contains('peek');
+  ctx.fillStyle = peek ? 'rgba(36, 36, 36, 0.90)' : '#242424';
+
+  // 3. Paint a fill over each crossed-off cell (matching the 1px inset
+  // used by the spotlight so the export looks like the live UI).
+  SECTIONS.forEach(sec => {
+    const secLeft = sec.left   / 100 * W;
+    const secTop  = sec.top    / 100 * H;
+    const secW    = sec.width  / 100 * W;
+    const secH    = sec.height / 100 * H;
+    const cellW = secW / sec.cols;
+    const cellH = secH / sec.rows;
+    for (let r = 0; r < sec.rows; r++) {
+      for (let c = 0; c < sec.cols; c++) {
+        const key = `${sec.id}:${r}:${c}`;
+        if (!crossed.has(key)) continue;
+        ctx.fillRect(
+          secLeft + c * cellW + 1,
+          secTop  + r * cellH + 1,
+          cellW - 2,
+          cellH - 2
+        );
+      }
+    }
+  });
+
+  // 4. Convert to JPG (synchronous) and trigger download immediately so the
+  // user-gesture context is preserved (some browsers block async downloads).
+  let dataUrl;
+  try {
+    dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+  } catch (err) {
+    // Most likely a tainted-canvas SecurityError when loading via file://.
+    alert(
+      'Could not export: ' + (err && err.message ? err.message : err) +
+      '\n\nThis can happen when opening the page directly from a file:// URL ' +
+      'in some browsers. Try Safari, or serve the folder via a tiny local HTTP server.'
+    );
+    return;
+  }
+
+  const a = document.createElement('a');
+  a.href = dataUrl;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+});
+
+document.getElementById('btn-reset').addEventListener('click', () => {
+  if (!confirm('Clear all crossed-off albums? This will also reset earned skip tokens.')) return;
+  crossed.clear();
+  tokens = 0;
+  highWater = 0;
+  localStorage.setItem(LS_KEY, JSON.stringify([]));
+  localStorage.setItem(LS_TOKENS, '0');
+  localStorage.setItem(LS_HIGHWATER, '0');
+  clearPick();
+  render();
+});
+</script>
+</body>
+</html>
