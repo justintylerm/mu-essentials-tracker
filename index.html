@@ -3,7 +3,13 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>/mu/ Essentials Tracker — v2</title>
+<title>/mu/ Essentials Tracker</title>
+<meta name="description" content="Track your progress through the classic 4chan /mu/ Essentials chart. Click to cross off listened albums, roll a randomizer when you can't decide, earn skip tokens, and export a JPG of your progress." />
+<meta name="theme-color" content="#242424" />
+<meta property="og:title" content="/mu/ Essentials Tracker" />
+<meta property="og:description" content="Click-to-cross-off web app for the 4chan /mu/ Essentials chart — slot-machine randomizer, skip tokens, peek mode, JPG export." />
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://justintylerm.github.io/mu-essentials-tracker/" />
 <style>
   :root {
     --bg: #242424;
@@ -348,7 +354,7 @@
   <button id="btn-skip">Skip</button>
 </div>
 
-<div id="stage-wrap">
+<main id="stage-wrap">
   <div id="stage">
     <picture>
       <!-- Mobile WebP: ~455 KB, half-resolution, perfect for ≤900px viewports -->
@@ -364,7 +370,7 @@
     <!-- sections injected here -->
     <div id="spotlight"></div>
   </div>
-</div>
+</main>
 <div id="dismiss-catcher"></div>
 
 <script>
