@@ -2,7 +2,7 @@
 
 A self-contained, single-page web app for crossing off albums from the classic 4chan `/mu/` Essentials chart.
 
-**Live:** _will appear here after GitHub Pages is enabled_
+**Live:** https://justintylerm.github.io/mu-essentials-tracker/
 
 ## Features
 
