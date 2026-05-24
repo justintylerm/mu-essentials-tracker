@@ -19,6 +19,14 @@
     --panel: #1a1a1a;
     --border: #2a2a2a;
     --dim: rgba(0,0,0,0.65);
+    --spot-inset: 4px;       /* spotlight outline thickness */
+    --spot-radius: 6px;      /* spotlight corner radius */
+  }
+  @media (max-width: 700px) {
+    :root {
+      --spot-inset: 2px;
+      --spot-radius: 4px;
+    }
   }
   * { box-sizing: border-box; }
   html, body {
@@ -75,7 +83,7 @@
   }
   #action-bar {
     position: fixed;
-    top: 36px;
+    bottom: 16px;
     left: 50%;
     transform: translateX(-50%);
     z-index: 1000;
@@ -269,11 +277,11 @@
     position: absolute;
     z-index: 50;
     pointer-events: none;
-    border-radius: 6px;
+    border-radius: var(--spot-radius);
     /* Inset box-shadow draws the "outline" — respects border-radius, unlike
        the native outline property. */
     box-shadow:
-      inset 0 0 0 4px var(--pick),
+      inset 0 0 0 var(--spot-inset) var(--pick),
       0 0 30px 8px rgba(255,210,63,0.85),
       0 0 0 9999px var(--dim);
     animation: pulse 1.2s ease-in-out infinite;
@@ -283,20 +291,20 @@
   #spotlight.spinning {
     animation: none;
     box-shadow:
-      inset 0 0 0 4px var(--pick),
+      inset 0 0 0 var(--spot-inset) var(--pick),
       0 0 18px 4px rgba(255,210,63,0.7),
       0 0 0 9999px var(--dim);
   }
   @keyframes pulse {
     0%, 100% {
       box-shadow:
-        inset 0 0 0 4px var(--pick),
+        inset 0 0 0 var(--spot-inset) var(--pick),
         0 0 30px 8px rgba(255,210,63,0.85),
         0 0 0 9999px var(--dim);
     }
     50% {
       box-shadow:
-        inset 0 0 0 4px var(--pick),
+        inset 0 0 0 var(--spot-inset) var(--pick),
         0 0 55px 18px rgba(255,210,63,1),
         0 0 0 9999px var(--dim);
     }
@@ -1318,8 +1326,7 @@ document.getElementById('btn-export').addEventListener('click', () => {
     }
   });
 
-  // 4. Convert to JPG (synchronous) and trigger download immediately so the
-  // user-gesture context is preserved (some browsers block async downloads).
+  // 4. Convert to JPG synchronously to keep the user-gesture context alive.
   let dataUrl;
   try {
     dataUrl = canvas.toDataURL('image/jpeg', 0.92);
@@ -1333,12 +1340,34 @@ document.getElementById('btn-export').addEventListener('click', () => {
     return;
   }
 
-  const a = document.createElement('a');
-  a.href = dataUrl;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
+  // On mobile, use the native share sheet so users can save to camera roll
+  // or send via Messages/Discord/etc. On desktop, fall through to a download.
+  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+  if (isMobile && navigator.canShare) {
+    // Convert data URL → Blob → File synchronously (no fetch — keep gesture).
+    const bin = atob(dataUrl.split(',')[1]);
+    const arr = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    const file = new File([arr], filename, { type: 'image/jpeg' });
+    if (navigator.canShare({ files: [file] })) {
+      navigator.share({ files: [file], title: filename }).catch(err => {
+        if (err && err.name === 'AbortError') return; // user cancelled
+        // Anything else: fall back to a regular download.
+        triggerDownload(dataUrl, filename);
+      });
+      return;
+    }
+  }
+  triggerDownload(dataUrl, filename);
+
+  function triggerDownload(href, name) {
+    const a = document.createElement('a');
+    a.href = href;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
 });
 
 /* ── Download data: dump all mu-tracker localStorage keys to a JSON file ──
