@@ -350,20 +350,13 @@
 
 <div id="stage-wrap">
   <div id="stage">
-    <img id="chart" alt="/mu/ essentials chart" />
+    <img id="chart" src="chart.jpg" alt="/mu/ essentials chart"
+         width="1781" height="4325" fetchpriority="high" decoding="async" />
     <!-- sections injected here -->
     <div id="spotlight"></div>
   </div>
 </div>
 <div id="dismiss-catcher"></div>
-
-<!-- chart-data.js sets CHART_DATA_URL, embedded as base64 so the canvas isn't
-     tainted under file:// CORS rules (lets the JPG export work in Chrome). -->
-<script src="chart-data.js"></script>
-<script>
-// Set img src from the embedded data URL.
-document.getElementById('chart').src = CHART_DATA_URL;
-</script>
 
 <script>
 /* Chart image: 1781 × 4325. Coordinates derived from pixel analysis. */
